@@ -4,6 +4,7 @@
 source_paths << File.dirname(__FILE__)
 
 gem "devise"
+gem "inertia_rails"
 gem "rails_pulse"
 
 after_bundle do
@@ -29,6 +30,9 @@ after_bundle do
     generate "devise:views"
   end
 
+  # --- Inertia Rails + Vite (interactive: framework, TypeScript, Tailwind) ---
+  generate "inertia:install"
+
   # --- Finalize ---
   rails_command "db:prepare"
 
@@ -36,4 +40,6 @@ after_bundle do
   say "  • Set root route in config/routes.rb"
   say "  • Add before_action :authenticate_user! to ApplicationController"
   say "  • RailsPulse dashboard: http://localhost:3000/rails_pulse"
+  say "  • Start dev servers: bin/dev"
+  say "  • Verify Inertia: http://localhost:3100/inertia-example"
 end
