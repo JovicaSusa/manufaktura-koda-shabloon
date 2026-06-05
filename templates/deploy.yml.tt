@@ -1,0 +1,53 @@
+service: <%= app_name %>
+image: your-user/<%= app_name %>
+
+servers:
+  web:
+    - YOUR_SERVER_IP
+<% if @install_solid_queue %>
+  workers:
+    hosts:
+      - YOUR_SERVER_IP
+    cmd: bin/jobs
+<% end %>
+
+# Let's Encrypt SSL via kamal-proxy. If using Cloudflare, set SSL/TLS mode to "Full".
+proxy:
+  ssl: true
+  host: your-app.example.com
+
+registry:
+  # server: ghcr.io  # uncomment to use GitHub Container Registry
+  username: your-user
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  secret:
+    - RAILS_MASTER_KEY
+    - DB_HOST
+    - DB_USERNAME
+    - DB_PASSWORD
+  clear:
+    RAILS_SERVE_STATIC_FILES: "true"
+    DB_NAME: <%= app_name %>_production
+    CACHE_DB_NAME: <%= app_name %>_cache_production
+    QUEUE_DB_NAME: <%= app_name %>_queue_production
+    CABLE_DB_NAME: <%= app_name %>_cable_production
+    RAILS_PULSE_DB_NAME: <%= app_name %>_rails_pulse_production
+    # WEB_CONCURRENCY: 2  # set to number of vCPUs on your server
+
+aliases:
+  console: app exec --interactive --reuse "bin/rails console"
+  shell: app exec --interactive --reuse "bash"
+  logs: app logs -f
+  dbc: app exec --interactive --reuse "bin/rails dbconsole"
+
+volumes:
+  - "<%= app_name %>_storage:/rails/storage"
+
+asset_path: /rails/public/assets
+
+builder:
+  arch: amd64
+  # remote: ssh://docker@docker-builder-server  # faster amd64 builds on Apple Silicon
