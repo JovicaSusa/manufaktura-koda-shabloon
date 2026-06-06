@@ -186,6 +186,27 @@ bin/kamal shell     # Bash shell inside the container
 bin/kamal dbc       # Database console
 ```
 
+## Claude Code skills
+
+The template automatically installs a curated set of Claude Code skills globally so they're available across all your projects:
+
+| Skill | Source | What it does |
+|-------|--------|-------------|
+| `inertia-rails-architecture` | inertia-rails/skills | Server vs client state decisions — load this first when building any Inertia feature |
+| `inertia-rails-controllers` | inertia-rails/skills | Prop strategies, flash, validation errors, `inertia_location` |
+| `inertia-rails-pages` | inertia-rails/skills | Layouts, navigation, infinite scroll, deferred sections |
+| `inertia-rails-forms` | inertia-rails/skills | Full form handling, file uploads, multi-step wizards |
+| `inertia-rails-typescript` | inertia-rails/skills | `SharedProps`/`InertiaConfig` type augmentation |
+| `rails-architecture` | rails_ai_agents | Rails architecture patterns and decisions |
+| `postgres-patterns` | rails_ai_agents | PostgreSQL-specific patterns |
+| `solid-queue-setup` | rails_ai_agents | Solid Queue configuration |
+| `performance-optimization` | rails_ai_agents | N+1 detection, caching, indexing |
+| `security-audit` | rails_ai_agents | Security analysis |
+| `extraction-timing` | rails_ai_agents | When and how to extract services, concerns, query objects |
+| `behavioral-guidelines` | rails_ai_agents | Anti-patterns to avoid |
+
+Skills are installed with `npx skills add … -g` and require [Node.js](https://nodejs.org) / npx to be available. If npx is not found, this step is silently skipped and skills can be installed manually afterward.
+
 ## Post-generation checklist
 
 After `rails new` finishes, a summary is printed. The key steps:

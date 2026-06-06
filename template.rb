@@ -270,6 +270,110 @@ RUBY
     DB_PASSWORD=$DB_PASSWORD
   BASH
 
+  # --- GitHub workflow scaffolding ---
+  solid_queue_line = @install_solid_queue ? "\n- Solid Queue + Mission Control (background jobs)" : ""
+
+  create_file "CLAUDE.md", <<~MARKDOWN
+    # #{app_name}
+
+    ## Stack
+    - Ruby on Rails + PostgreSQL (multi-database: primary, cache, queue, cable, rails_pulse)
+    - Inertia.js + Vite + TypeScript (no separate API — server renders props)
+    - Devise (auth) · Action Policy (authorization) · Alba (serializers)#{solid_queue_line}
+
+    ## Workflow
+    1. Write a spec in `docs/specs/<feature>.md` for non-trivial features
+    2. Open a GitHub Issue referencing the spec; add it to the Project board
+    3. When coding, reference the issue number and spec file for full context
+
+    ## Key conventions
+    - Style: Standard (Evil Martians) — never RuboCop defaults
+    - Serializers: Alba only — never JBuilder
+    - Authorization: Action Policy (policy objects) — never CanCan/Pundit
+    - Avoid N+1: Prosopite middleware is active in development
+    - Migrations: Strong Migrations blocks unsafe ops — check before running
+
+    ## Dashboards (development)
+    - /rails_pulse   — app monitoring
+    - /pghero        — Postgres performance
+    - /letter_opener — email preview#{@install_solid_queue ? "\n    - /jobs          — job queue (Solid Queue)" : ""}
+  MARKDOWN
+
+  create_file ".github/ISSUE_TEMPLATE/feature.yml", <<~YAML
+    name: Feature / Spec
+    description: Define a feature or technical specification
+    title: "[Feature]: "
+    labels: ["feature"]
+    body:
+      - type: textarea
+        id: problem
+        attributes:
+          label: Problem / Goal
+          description: What are we solving or building?
+        validations:
+          required: true
+      - type: textarea
+        id: solution
+        attributes:
+          label: Proposed Solution
+          description: High-level approach
+      - type: textarea
+        id: technical
+        attributes:
+          label: Technical Notes
+          description: Models, routes, components, edge cases
+      - type: textarea
+        id: acceptance
+        attributes:
+          label: Acceptance Criteria
+          description: "- [ ] item"
+  YAML
+
+  create_file ".github/ISSUE_TEMPLATE/bug.yml", <<~YAML
+    name: Bug Report
+    description: Something is broken
+    title: "[Bug]: "
+    labels: ["bug"]
+    body:
+      - type: textarea
+        id: description
+        attributes:
+          label: What happened?
+        validations:
+          required: true
+      - type: textarea
+        id: steps
+        attributes:
+          label: Steps to reproduce
+          description: "1. Go to... 2. Click... 3. See error"
+        validations:
+          required: true
+      - type: textarea
+        id: expected
+        attributes:
+          label: Expected behaviour
+      - type: textarea
+        id: environment
+        attributes:
+          label: Environment
+          description: Ruby version, browser, relevant config
+  YAML
+
+  create_file ".github/pull_request_template.md", <<~MARKDOWN
+    ## Summary
+
+    ## Related Issue
+    Closes #
+
+    ## Changes
+    -
+
+    ## Test Plan
+    - [ ]
+  MARKDOWN
+
+  create_file "docs/specs/.keep", ""
+
   # --- GitHub Actions CI ---
   create_file ".github/workflows/ci.yml", <<~YAML
     name: CI
@@ -348,10 +452,26 @@ RUBY
     say "  • Mission Control dashboard: http://localhost:3000/jobs"
   end
 
+  say "  • Create a GitHub Project board for task tracking (Issues → Projects)"
+
   say "\nKamal deployment (config/deploy.yml):"
   say "  • Replace YOUR_SERVER_IP with your Hetzner server IP"
   say "  • Replace your-app.example.com with your domain"
   say "  • Replace your-user with your Docker Hub / ghcr.io username"
   say "  • Set DB_HOST, DB_USERNAME, DB_PASSWORD in your shell and in .kamal/secrets"
   say "  • First deploy: kamal setup"
+
+  # --- Claude Code Skills ---
+  say "\nInstalling Claude Code skills (global)..."
+  skills = %w[
+    inertia-rails/skills@inertia-rails-architecture
+    inertia-rails/skills@inertia-rails-controllers
+    inertia-rails/skills@inertia-rails-pages
+    inertia-rails/skills@inertia-rails-forms
+    inertia-rails/skills@inertia-rails-typescript
+    ThibautBaissac/rails_ai_agents
+  ]
+  skills.each do |skill|
+    run "npx skills add #{skill} -g -y 2>/dev/null || true", capture: false
+  end
 end
