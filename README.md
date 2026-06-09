@@ -186,6 +186,108 @@ bin/kamal shell     # Bash shell inside the container
 bin/kamal dbc       # Database console
 ```
 
+## Pullfrog AI PR reviewer
+
+[Pullfrog](https://pullfrog.com) is an AI agent that runs in GitHub Actions. Add it to your app for automatic PR reviews and on-demand tasks. **No API key required** — it uses the free Big Pickle model. The only credential needed is `GITHUB_TOKEN`, which GitHub injects automatically.
+
+### Setup
+
+1. Push your repo to GitHub
+2. Go to [pullfrog.com](https://pullfrog.com) → sign in with GitHub → install the GitHub App → select your repo
+3. Copy the two workflow files below into your app
+
+### Workflow files
+
+**`.github/workflows/pullfrog.yml`** — on-demand agent, triggered manually via the Actions UI or by mentioning `@pullfrog` in any PR or issue comment:
+
+```yaml
+# PULLFROG ACTION — DO NOT EDIT EXCEPT WHERE INDICATED
+name: Pullfrog
+run-name: ${{ inputs.name || github.workflow }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        type: string
+        description: Agent prompt
+      name:
+        type: string
+        description: Run name
+
+permissions:
+  contents: read
+
+jobs:
+  pullfrog:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Run agent
+        uses: pullfrog/pullfrog@v0
+        with:
+          prompt: ${{ inputs.prompt }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**`.github/workflows/pr_review.yml`** — fires automatically on every opened or ready-for-review PR and posts inline review comments:
+
+```yaml
+name: PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Review PR
+        uses: pullfrog/pullfrog@v0
+        with:
+          prompt: |
+            Review the open pull request for this Ruby on Rails application.
+
+            Stack: Rails + PostgreSQL + Inertia.js + Vite + TypeScript + Devise + Action Policy + Alba
+
+            Focus on:
+            - Correctness bugs and logic errors
+            - Security issues (SQL injection, XSS, mass assignment, missing authorization)
+            - N+1 queries or missing eager loading (Prosopite is active — check for patterns it would catch)
+            - Missing database indices on foreign keys or frequently queried columns
+            - Action Policy violations (missing policy checks, incorrect scope usage)
+            - Alba serializer issues (exposing sensitive attributes)
+            - Strong Migrations violations (unsafe migration patterns)
+
+            Post your findings as inline review comments on the PR via the GitHub API.
+            Be concise — flag real issues only, skip style nits unless they cause bugs.
+            If the PR looks good, post a short approving summary comment.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
 ## Claude Code skills
 
 The template automatically installs a curated set of Claude Code skills globally so they're available across all your projects:
@@ -217,6 +319,7 @@ After `rails new` finishes, a summary is printed. The key steps:
 - [ ] Export `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` in your shell for Kamal
 - [ ] Change Mission Control and PgHero passwords before deploying to production
 - [ ] Run `bundle exec database_consistency` to verify your schema matches your models
+- [ ] Set up Pullfrog AI PR reviewer at [pullfrog.com](https://pullfrog.com) — install GitHub App → select repo (no API key needed, uses free Big Pickle model)
 
 ## Conventions
 

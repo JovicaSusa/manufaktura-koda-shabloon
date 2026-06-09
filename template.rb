@@ -4,12 +4,20 @@
 source_paths << File.dirname(__FILE__)
 
 @install_solid_queue = yes?("Install Solid Queue for background jobs? [y/n]")
+@inertia_framework  = ask("Which frontend framework?", limited_to: %w[vue react svelte], default: "vue")
+@inertia_typescript = yes?("Use TypeScript? [y/n]")
+@install_tailwind   = yes?("Install Tailwind CSS? [y/n]")
 
 gsub_file "Gemfile", /^gem ["']sqlite3["'].*\n/, ""
+gsub_file "Gemfile", /^gem ["']pg["'].*\n/, ""
+
+# Replace database.yml early so Rails generators that boot the app don't try to load sqlite3
+template "templates/database_pg.yml.tt", "config/database.yml", force: true
 
 gem "pg"
 gem "devise"
 gem "inertia_rails"
+gem "vite_rails"
 gem "rails_pulse"
 gem "action_policy"
 gem "alba"
@@ -19,8 +27,6 @@ gem "js-routes"
 
 if @install_solid_queue
   gem "mission_control-jobs"
-  gem "propshaft"
-  gem "solid_queue"
 end
 
 gem "silencer", require: false
@@ -58,7 +64,6 @@ gem "bundlebun"
 after_bundle do
   # --- RailsPulse (silent, separate database) ---
   generate "rails_pulse:install", "--database=separate"
-  template "templates/database_pg.yml.tt", "config/database.yml", force: true
   route "mount RailsPulse::Engine => \"/rails_pulse\""
 
   # --- Devise (interactive) ---
@@ -91,8 +96,13 @@ after_bundle do
   generate "js_routes:middleware"
   append_to_file ".gitignore", "\n/app/javascript/routes.js\n/app/javascript/routes.d.ts\n"
 
-  # --- Inertia Rails + Vite (interactive: framework, TypeScript, Tailwind) ---
-  generate "inertia:install"
+  # --- Vite + Inertia Rails ---
+  run "bundle exec vite install"
+  remove_file "bin/dev"
+  inertia_opts = "--framework=#{@inertia_framework}"
+  inertia_opts += " --typescript" if @inertia_typescript
+  inertia_opts += @install_tailwind ? " --tailwind" : " --no-tailwind"
+  generate "inertia:install", inertia_opts
   rake "bun:install"
 
   # --- Solid Queue + Mission Control ---
@@ -146,8 +156,12 @@ RUBY
   pghero_pass = ask("PgHero dashboard password?", default: "secret")
 
   initializer "pghero.rb", <<~RUBY
-    PgHero.username = ENV.fetch("PGHERO_USERNAME", "#{pghero_user}")
-    PgHero.password = ENV.fetch("PGHERO_PASSWORD", "#{pghero_pass}")
+    Rails.application.config.after_initialize do
+      PgHero::HomeController.http_basic_authenticate_with(
+        name: ENV.fetch("PGHERO_USERNAME", "#{pghero_user}"),
+        password: ENV.fetch("PGHERO_PASSWORD", "#{pghero_pass}")
+      )
+    end
   RUBY
 
   route 'mount PgHero::Engine, at: "/pghero"'
@@ -160,13 +174,15 @@ RUBY
   # --- Standard + RuboCop (Evil Martians style) ---
   ruby_version = ask("Target Ruby version for RuboCop?", default: "3.3")
 
-  create_file ".rubocop.yml", <<~YAML
+  create_file ".rubocop.yml", <<~YAML, force: true
     inherit_mode:
       merge:
         - Exclude
 
     require:
       - standard
+
+    plugins:
       - standard-rails
       - rubocop-rspec
 
@@ -375,7 +391,7 @@ RUBY
   create_file "docs/specs/.keep", ""
 
   # --- GitHub Actions CI ---
-  create_file ".github/workflows/ci.yml", <<~YAML
+  create_file ".github/workflows/ci.yml", <<~YAML, force: true
     name: CI
 
     on:
@@ -453,6 +469,7 @@ RUBY
   end
 
   say "  • Create a GitHub Project board for task tracking (Issues → Projects)"
+  say "  • Optional: add Pullfrog AI PR reviewer — see README for setup"
 
   say "\nKamal deployment (config/deploy.yml):"
   say "  • Replace YOUR_SERVER_IP with your Hetzner server IP"
