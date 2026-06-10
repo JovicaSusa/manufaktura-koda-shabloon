@@ -99,7 +99,7 @@ after_bundle do
   # --- Vite + Inertia Rails ---
   run "bundle exec vite install"
   remove_file "bin/dev"
-  inertia_opts = "--framework=#{@inertia_framework}"
+  inertia_opts = "--framework=#{@inertia_framework} --vite"
   inertia_opts += " --typescript" if @inertia_typescript
   inertia_opts += @install_tailwind ? " --tailwind" : " --no-tailwind"
   generate "inertia:install", inertia_opts
@@ -197,6 +197,7 @@ RUBY
       Exclude:
         - "bin/**/*"
         - "db/schema.rb"
+        - "db/migrate/*_create_pghero_query_stats.rb"
         - "node_modules/**/*"
         - "vendor/**/*"
   YAML
@@ -217,6 +218,8 @@ RUBY
   RUBY
 
   create_file "spec/support/shoulda_matchers.rb", <<~RUBY
+    require "shoulda/matchers"
+
     Shoulda::Matchers.configure do |config|
       config.integrate do |with|
         with.test_framework :rspec
