@@ -449,6 +449,91 @@ RUBY
             run: bundle exec rspec
   YAML
 
+  # --- Pullfrog AI PR reviewer ---
+  create_file ".github/workflows/pullfrog.yml", <<~YAML, force: true
+    # PULLFROG ACTION — DO NOT EDIT EXCEPT WHERE INDICATED
+    name: Pullfrog
+    run-name: ${{ inputs.name || github.workflow }}
+
+    on:
+      workflow_dispatch:
+        inputs:
+          prompt:
+            type: string
+            description: Agent prompt
+          name:
+            type: string
+            description: Run name
+
+    permissions:
+      contents: read
+
+    jobs:
+      pullfrog:
+        runs-on: ubuntu-latest
+        permissions:
+          id-token: write
+          contents: read
+          pull-requests: write
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 1
+          - name: Run agent
+            uses: pullfrog/pullfrog@v0
+            with:
+              prompt: ${{ inputs.prompt }}
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  YAML
+
+  create_file ".github/workflows/pr_review.yml", <<~YAML, force: true
+    name: PR Review
+
+    on:
+      pull_request:
+        types: [opened, ready_for_review]
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    jobs:
+      review:
+        runs-on: ubuntu-latest
+        if: github.event.pull_request.draft == false
+        permissions:
+          id-token: write
+          contents: read
+          pull-requests: write
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+          - name: Review PR
+            uses: pullfrog/pullfrog@v0
+            with:
+              prompt: |
+                Review the open pull request for this Ruby on Rails + Inertia.js + Vite application.
+
+                Focus on:
+                - Correctness bugs and logic errors
+                - Security issues (SQL injection, XSS, mass assignment, missing authorization)
+                - N+1 queries or missing eager loading (Prosopite is active — check for patterns it would catch)
+                - Missing database indices on foreign keys or frequently queried columns
+                - Action Policy violations (missing policy checks, incorrect scope usage)
+                - Alba serializer issues (exposing sensitive attributes)
+                - Strong Migrations violations (unsafe migration patterns)
+
+                Post your findings as inline review comments on the PR via the GitHub API.
+                Be concise — flag real issues only, skip style nits unless they cause bugs.
+                If the PR looks good, post a short approving summary comment.
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  YAML
+
   # --- Finalize ---
   run "bundle exec rubocop --autocorrect-all", capture: false
   rails_command "db:prepare"
@@ -469,7 +554,7 @@ RUBY
   end
 
   say "  • Create a GitHub Project board for task tracking (Issues → Projects)"
-  say "  • Optional: add Pullfrog AI PR reviewer — see README for setup"
+  say "  • Pullfrog AI PR reviewer: connect your repo at pullfrog.com — see README for setup"
 
   say "\nKamal deployment (config/deploy.yml):"
   say "  • Replace YOUR_SERVER_IP with your Hetzner server IP"

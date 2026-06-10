@@ -188,17 +188,23 @@ bin/kamal dbc       # Database console
 
 ## Pullfrog AI PR reviewer
 
-[Pullfrog](https://pullfrog.com) is an AI agent that runs in GitHub Actions. Add it to your app for automatic PR reviews and on-demand tasks.
+[Pullfrog](https://pullfrog.com) is an AI agent that runs inside GitHub Actions. It gives you two things: automatic code review on every PR, and an on-demand agent you can prompt directly from the GitHub UI or a PR comment.
+
+The template generates two workflow files for you:
+
+- **`.github/workflows/pr_review.yml`** — fires automatically when a PR is opened or marked ready for review. Pullfrog checks out the diff and posts inline review comments focused on bugs, security issues, N+1 queries, missing indices, Action Policy violations, and Strong Migrations violations.
+- **`.github/workflows/pullfrog.yml`** — an on-demand agent. Trigger it manually from the Actions tab or by mentioning `@pullfrog` in any PR or issue comment, and pass it a free-form prompt.
 
 ### Setup
+
+The workflow files are already in your repo — you just need to connect Pullfrog to your GitHub account:
 
 1. Push your repo to GitHub
 2. Go to [pullfrog.com](https://pullfrog.com) and sign in with GitHub
 3. Install the Pullfrog GitHub App — check if it's already installed at GitHub → Settings → Applications → Installed GitHub Apps; if not, install it on your personal account or organization (you can restrict it to specific repos or allow all)
 4. Select the repository you want to configure in the Pullfrog dashboard (settings are per-repo)
-5. Add the workflow file — use the one-click option in the dashboard to generate `.github/workflows/pullfrog.yml` automatically, or create it manually from the template in the docs
-6. Configure model access — choose **Pullfrog Router** (recommended, comes with $10 free beta credit, no provider keys needed) or **Bring Your Own Keys**: store credentials either as Pullfrog secrets (in the dashboard, injected automatically) or as GitHub Actions secrets (repo Settings → Secrets and variables → Actions, then map them manually in the `env:` block of your workflow file)
-7. Test it — enter a prompt in the Pullfrog dashboard and click Send (or `Cmd+Enter`) to dispatch a run and verify it works via the Actions logs
+5. Configure model access — choose **Pullfrog Router** (recommended, comes with $10 free beta credit, no provider keys needed) or **Bring Your Own Keys**: store credentials either as Pullfrog secrets (in the dashboard, injected automatically) or as GitHub Actions secrets (repo Settings → Secrets and variables → Actions, then map them manually in the `env:` block of your workflow file)
+6. Test it — enter a prompt in the Pullfrog dashboard and click Send (or `Cmd+Enter`) to dispatch a run and verify it works via the Actions logs
 
 ## Claude Code skills
 
@@ -231,7 +237,7 @@ After `rails new` finishes, a summary is printed. The key steps:
 - [ ] Export `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` in your shell for Kamal
 - [ ] Change Mission Control and PgHero passwords before deploying to production
 - [ ] Run `bundle exec database_consistency` to verify your schema matches your models
-- [ ] Set up Pullfrog AI PR reviewer at [pullfrog.com](https://pullfrog.com) — install GitHub App → select repo (no API key needed, uses free Big Pickle model)
+- [ ] Connect Pullfrog AI PR reviewer — sign in at [pullfrog.com](https://pullfrog.com), install the GitHub App, and select your repo (workflow files are already generated)
 
 ## Conventions
 
