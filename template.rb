@@ -3,8 +3,7 @@
 
 source_paths << File.dirname(__FILE__)
 
-@install_solid_queue = yes?("Install Solid Queue for background jobs? [y/n]")
-@inertia_framework  = ask("Which frontend framework?", limited_to: %w[vue react svelte], default: "vue")
+@inertia_framework  = ask("Which frontend framework?", limited_to: %w[vue react svelte], default: "react")
 @inertia_typescript = yes?("Use TypeScript? [y/n]")
 @install_tailwind   = yes?("Install Tailwind CSS? [y/n]")
 
@@ -25,9 +24,7 @@ gem "alba-inertia"
 gem "typelizer"
 gem "js-routes"
 
-if @install_solid_queue
-  gem "mission_control-jobs"
-end
+gem "mission_control-jobs"
 
 gem "silencer", require: false
 gem "freezolite"
@@ -106,19 +103,17 @@ after_bundle do
   rake "bun:install"
 
   # --- Solid Queue + Mission Control ---
-  if @install_solid_queue
-    rails_command "solid_queue:install"
+  rails_command "solid_queue:install"
 
-    mj_user = ask("Mission Control dashboard username?", default: "admin")
-    mj_pass = ask("Mission Control dashboard password?", default: "secret")
+  mj_user = ask("Mission Control dashboard username?", default: "admin")
+  mj_pass = ask("Mission Control dashboard password?", default: "secret")
 
-    initializer "mission_control_jobs.rb", <<~RUBY
-      MissionControl::Jobs.http_basic_auth_user = "#{mj_user}"
-      MissionControl::Jobs.http_basic_auth_password = "#{mj_pass}"
-    RUBY
+  initializer "mission_control_jobs.rb", <<~RUBY
+    MissionControl::Jobs.http_basic_auth_user = "#{mj_user}"
+    MissionControl::Jobs.http_basic_auth_password = "#{mj_pass}"
+  RUBY
 
-    route 'mount MissionControl::Jobs::Engine, at: "/jobs"'
-  end
+  route 'mount MissionControl::Jobs::Engine, at: "/jobs"'
 
   # --- Isolator (detect non-atomic interactions within transactions) ---
   initializer "isolator.rb", <<~RUBY
@@ -290,15 +285,14 @@ RUBY
   BASH
 
   # --- GitHub workflow scaffolding ---
-  solid_queue_line = @install_solid_queue ? "\n- Solid Queue + Mission Control (background jobs)" : ""
-
   create_file "CLAUDE.md", <<~MARKDOWN
     # #{app_name}
 
     ## Stack
     - Ruby on Rails + PostgreSQL (multi-database: primary, cache, queue, cable, rails_pulse)
     - Inertia.js + Vite + TypeScript (no separate API — server renders props)
-    - Devise (auth) · Action Policy (authorization) · Alba (serializers)#{solid_queue_line}
+    - Devise (auth) · Action Policy (authorization) · Alba (serializers)
+    - Solid Queue + Mission Control (background jobs)
 
     ## Workflow
     1. Write a spec in `docs/specs/<feature>.md` for non-trivial features
@@ -315,7 +309,8 @@ RUBY
     ## Dashboards (development)
     - /rails_pulse   — app monitoring
     - /pghero        — Postgres performance
-    - /letter_opener — email preview#{@install_solid_queue ? "\n    - /jobs          — job queue (Solid Queue)" : ""}
+    - /letter_opener — email preview
+    - /jobs          — job queue (Solid Queue)
   MARKDOWN
 
   create_file ".github/ISSUE_TEMPLATE/feature.yml", <<~YAML
@@ -453,89 +448,8 @@ RUBY
   YAML
 
   # --- Pullfrog AI PR reviewer ---
-  create_file ".github/workflows/pullfrog.yml", <<~YAML, force: true
-    # PULLFROG ACTION — DO NOT EDIT EXCEPT WHERE INDICATED
-    name: Pullfrog
-    run-name: ${{ inputs.name || github.workflow }}
-
-    on:
-      workflow_dispatch:
-        inputs:
-          prompt:
-            type: string
-            description: Agent prompt
-          name:
-            type: string
-            description: Run name
-
-    permissions:
-      contents: read
-
-    jobs:
-      pullfrog:
-        runs-on: ubuntu-latest
-        permissions:
-          id-token: write
-          contents: read
-          pull-requests: write
-        steps:
-          - name: Checkout code
-            uses: actions/checkout@v4
-            with:
-              fetch-depth: 1
-          - name: Run agent
-            uses: pullfrog/pullfrog@v0
-            with:
-              prompt: ${{ inputs.prompt }}
-            env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  YAML
-
-  create_file ".github/workflows/pr_review.yml", <<~YAML, force: true
-    name: PR Review
-
-    on:
-      pull_request:
-        types: [opened, ready_for_review]
-
-    permissions:
-      contents: read
-      pull-requests: write
-
-    jobs:
-      review:
-        runs-on: ubuntu-latest
-        if: github.event.pull_request.draft == false
-        permissions:
-          id-token: write
-          contents: read
-          pull-requests: write
-        steps:
-          - name: Checkout code
-            uses: actions/checkout@v4
-            with:
-              fetch-depth: 0
-          - name: Review PR
-            uses: pullfrog/pullfrog@v0
-            with:
-              prompt: |
-                Review the open pull request for this Ruby on Rails + Inertia.js + Vite application.
-
-                Focus on:
-                - Correctness bugs and logic errors
-                - Security issues (SQL injection, XSS, mass assignment, missing authorization)
-                - N+1 queries or missing eager loading (Prosopite is active — check for patterns it would catch)
-                - Missing database indices on foreign keys or frequently queried columns
-                - Action Policy violations (missing policy checks, incorrect scope usage)
-                - Alba serializer issues (exposing sensitive attributes)
-                - Strong Migrations violations (unsafe migration patterns)
-
-                Post your findings as inline review comments on the PR via the GitHub API.
-                Be concise — flag real issues only, skip style nits unless they cause bugs.
-                If the PR looks good, post a short approving summary comment.
-            env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  YAML
+  copy_file "templates/pullfrog.yml", ".github/workflows/pullfrog.yml"
+  copy_file "templates/pr_review.yml", ".github/workflows/pr_review.yml"
 
   # --- Finalize ---
   run "bundle exec rubocop --autocorrect-all", capture: false
@@ -556,6 +470,8 @@ RUBY
     say "  • Mission Control dashboard: http://localhost:3000/jobs"
   end
 
+  say "  • Start job processor: bin/jobs"
+  say "  • Mission Control dashboard: http://localhost:3000/jobs"
   say "  • Create a GitHub Project board for task tracking (Issues → Projects)"
   say "  • Pullfrog AI PR reviewer: connect your repo at pullfrog.com — see README for setup"
 

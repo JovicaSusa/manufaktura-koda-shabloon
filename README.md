@@ -32,7 +32,6 @@ The template will ask a series of questions during generation. You can accept th
 
 | Prompt | Default | Notes |
 |--------|---------|-------|
-| Install Solid Queue? | — | Adds background job processing + Mission Control dashboard |
 | Generate a Devise model? | — | Recommended; creates your User (or other) model |
 | Model name | `User` | The name of the Devise authentication model |
 | Copy Devise views? | — | Useful when you need to customize sign-in/sign-up HTML |
@@ -71,9 +70,7 @@ Development and test environments use a primary database plus a separate `rails_
 - **Typelizer** — generates TypeScript types from your Ruby serializers so your frontend stays in sync with your backend.
 - **Alba** — lightweight JSON serialization, used instead of JBuilder.
 
-### Background Jobs (optional)
-
-When you choose to install Solid Queue:
+### Background Jobs
 
 - **Solid Queue** — database-backed job queue, no Redis required.
 - **Mission Control** — web dashboard at `/jobs` to inspect and manage queued jobs.
