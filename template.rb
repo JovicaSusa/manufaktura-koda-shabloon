@@ -3,13 +3,20 @@
 
 source_paths << File.dirname(__FILE__)
 
-@install_solid_queue = yes?("Install Solid Queue for background jobs? [y/n]")
+@inertia_framework  = ask("Which frontend framework?", limited_to: %w[vue react svelte], default: "react")
+@inertia_typescript = yes?("Use TypeScript? [y/n]")
+@install_tailwind   = yes?("Install Tailwind CSS? [y/n]")
 
 gsub_file "Gemfile", /^gem ["']sqlite3["'].*\n/, ""
+gsub_file "Gemfile", /^gem ["']pg["'].*\n/, ""
+
+# Replace database.yml early so Rails generators that boot the app don't try to load sqlite3
+template "templates/database_pg.yml.tt", "config/database.yml", force: true
 
 gem "pg"
 gem "devise"
 gem "inertia_rails"
+gem "vite_rails"
 gem "rails_pulse"
 gem "action_policy"
 gem "alba"
@@ -17,11 +24,7 @@ gem "alba-inertia"
 gem "typelizer"
 gem "js-routes"
 
-if @install_solid_queue
-  gem "mission_control-jobs"
-  gem "propshaft"
-  gem "solid_queue"
-end
+gem "mission_control-jobs"
 
 gem "silencer", require: false
 gem "freezolite"
@@ -58,7 +61,6 @@ gem "bundlebun"
 after_bundle do
   # --- RailsPulse (silent, separate database) ---
   generate "rails_pulse:install", "--database=separate"
-  template "templates/database_pg.yml.tt", "config/database.yml", force: true
   route "mount RailsPulse::Engine => \"/rails_pulse\""
 
   # --- Devise (interactive) ---
@@ -91,24 +93,27 @@ after_bundle do
   generate "js_routes:middleware"
   append_to_file ".gitignore", "\n/app/javascript/routes.js\n/app/javascript/routes.d.ts\n"
 
-  # --- Inertia Rails + Vite (interactive: framework, TypeScript, Tailwind) ---
-  generate "inertia:install"
+  # --- Vite + Inertia Rails ---
+  run "bundle exec vite install"
+  remove_file "bin/dev"
+  inertia_opts = "--framework=#{@inertia_framework} --vite"
+  inertia_opts += " --typescript" if @inertia_typescript
+  inertia_opts += @install_tailwind ? " --tailwind" : " --no-tailwind"
+  generate "inertia:install", inertia_opts
   rake "bun:install"
 
   # --- Solid Queue + Mission Control ---
-  if @install_solid_queue
-    rails_command "solid_queue:install"
+  rails_command "solid_queue:install"
 
-    mj_user = ask("Mission Control dashboard username?", default: "admin")
-    mj_pass = ask("Mission Control dashboard password?", default: "secret")
+  mj_user = ask("Mission Control dashboard username?", default: "admin")
+  mj_pass = ask("Mission Control dashboard password?", default: "secret")
 
-    initializer "mission_control_jobs.rb", <<~RUBY
-      MissionControl::Jobs.http_basic_auth_user = "#{mj_user}"
-      MissionControl::Jobs.http_basic_auth_password = "#{mj_pass}"
-    RUBY
+  initializer "mission_control_jobs.rb", <<~RUBY
+    MissionControl::Jobs.http_basic_auth_user = "#{mj_user}"
+    MissionControl::Jobs.http_basic_auth_password = "#{mj_pass}"
+  RUBY
 
-    route 'mount MissionControl::Jobs::Engine, at: "/jobs"'
-  end
+  route 'mount MissionControl::Jobs::Engine, at: "/jobs"'
 
   # --- Isolator (detect non-atomic interactions within transactions) ---
   initializer "isolator.rb", <<~RUBY
@@ -146,8 +151,12 @@ RUBY
   pghero_pass = ask("PgHero dashboard password?", default: "secret")
 
   initializer "pghero.rb", <<~RUBY
-    PgHero.username = ENV.fetch("PGHERO_USERNAME", "#{pghero_user}")
-    PgHero.password = ENV.fetch("PGHERO_PASSWORD", "#{pghero_pass}")
+    Rails.application.config.after_initialize do
+      PgHero::HomeController.http_basic_authenticate_with(
+        name: ENV.fetch("PGHERO_USERNAME", "#{pghero_user}"),
+        password: ENV.fetch("PGHERO_PASSWORD", "#{pghero_pass}")
+      )
+    end
   RUBY
 
   route 'mount PgHero::Engine, at: "/pghero"'
@@ -160,13 +169,15 @@ RUBY
   # --- Standard + RuboCop (Evil Martians style) ---
   ruby_version = ask("Target Ruby version for RuboCop?", default: "3.3")
 
-  create_file ".rubocop.yml", <<~YAML
+  create_file ".rubocop.yml", <<~YAML, force: true
     inherit_mode:
       merge:
         - Exclude
 
     require:
       - standard
+
+    plugins:
       - standard-rails
       - rubocop-rspec
 
@@ -181,6 +192,7 @@ RUBY
       Exclude:
         - "bin/**/*"
         - "db/schema.rb"
+        - "db/migrate/*_create_pghero_query_stats.rb"
         - "node_modules/**/*"
         - "vendor/**/*"
   YAML
@@ -201,6 +213,8 @@ RUBY
   RUBY
 
   create_file "spec/support/shoulda_matchers.rb", <<~RUBY
+    require "shoulda/matchers"
+
     Shoulda::Matchers.configure do |config|
       config.integrate do |with|
         with.test_framework :rspec
@@ -271,15 +285,14 @@ RUBY
   BASH
 
   # --- GitHub workflow scaffolding ---
-  solid_queue_line = @install_solid_queue ? "\n- Solid Queue + Mission Control (background jobs)" : ""
-
   create_file "CLAUDE.md", <<~MARKDOWN
     # #{app_name}
 
     ## Stack
     - Ruby on Rails + PostgreSQL (multi-database: primary, cache, queue, cable, rails_pulse)
     - Inertia.js + Vite + TypeScript (no separate API — server renders props)
-    - Devise (auth) · Action Policy (authorization) · Alba (serializers)#{solid_queue_line}
+    - Devise (auth) · Action Policy (authorization) · Alba (serializers)
+    - Solid Queue + Mission Control (background jobs)
 
     ## Workflow
     1. Write a spec in `docs/specs/<feature>.md` for non-trivial features
@@ -296,7 +309,8 @@ RUBY
     ## Dashboards (development)
     - /rails_pulse   — app monitoring
     - /pghero        — Postgres performance
-    - /letter_opener — email preview#{@install_solid_queue ? "\n    - /jobs          — job queue (Solid Queue)" : ""}
+    - /letter_opener — email preview
+    - /jobs          — job queue (Solid Queue)
   MARKDOWN
 
   create_file ".github/ISSUE_TEMPLATE/feature.yml", <<~YAML
@@ -375,7 +389,7 @@ RUBY
   create_file "docs/specs/.keep", ""
 
   # --- GitHub Actions CI ---
-  create_file ".github/workflows/ci.yml", <<~YAML
+  create_file ".github/workflows/ci.yml", <<~YAML, force: true
     name: CI
 
     on:
@@ -433,6 +447,10 @@ RUBY
             run: bundle exec rspec
   YAML
 
+  # --- Pullfrog AI PR reviewer ---
+  copy_file "templates/pullfrog.yml", ".github/workflows/pullfrog.yml"
+  copy_file "templates/pr_review.yml", ".github/workflows/pr_review.yml"
+
   # --- Finalize ---
   run "bundle exec rubocop --autocorrect-all", capture: false
   rails_command "db:prepare"
@@ -452,7 +470,10 @@ RUBY
     say "  • Mission Control dashboard: http://localhost:3000/jobs"
   end
 
+  say "  • Start job processor: bin/jobs"
+  say "  • Mission Control dashboard: http://localhost:3000/jobs"
   say "  • Create a GitHub Project board for task tracking (Issues → Projects)"
+  say "  • Pullfrog AI PR reviewer: connect your repo at pullfrog.com — see README for setup"
 
   say "\nKamal deployment (config/deploy.yml):"
   say "  • Replace YOUR_SERVER_IP with your Hetzner server IP"
