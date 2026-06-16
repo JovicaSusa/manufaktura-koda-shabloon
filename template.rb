@@ -25,7 +25,7 @@ gem "alba-inertia"
 gem "typelizer"
 gem "js-routes"
 
-gem "ruby_llm" if @install_ruby_llm
+gem "ruby_llm", "~> 1" if @install_ruby_llm
 
 gem "mission_control-jobs"
 
@@ -96,11 +96,16 @@ after_bundle do
   if @install_ruby_llm
     rails_command "generate ruby_llm:install"
 
+    Dir.glob("db/migrate/*_add_references_to_chats_tool_calls_and_messages.rb").each do |migration|
+      gsub_file migration, "  def change\n", "  def change\n    safety_assured do\n"
+      gsub_file migration, "\n  end\nend", "\n    end\n  end\nend"
+    end
+
     if yes?("Generate ruby-llm Chat UI (controllers, views, Turbo streaming)? [y/n]")
       rails_command "generate ruby_llm:chat_ui"
     end
 
-    providers = ask("Which AI providers? (comma-separated: openai, anthropic, gemini)", default: "openai")
+    providers = ask("Which AI providers? (comma-separated: openai, anthropic, gemini)", default: "anthropic")
     provider_list = providers.split(",").map(&:strip)
 
     key_lines = []
@@ -108,12 +113,8 @@ after_bundle do
     key_lines << "  config.anthropic_api_key = ENV.fetch(\"ANTHROPIC_API_KEY\", nil)" if provider_list.include?("anthropic")
     key_lines << "  config.gemini_api_key    = ENV.fetch(\"GEMINI_API_KEY\", nil)" if provider_list.include?("gemini")
 
-    initializer "ruby_llm.rb", "RubyLLM.configure do |config|\n#{key_lines.join("\n")}\nend\n"
+    create_file "config/initializers/ruby_llm.rb", "RubyLLM.configure do |config|\n#{key_lines.join("\n")}\nend\n", force: true
   end
-
-  # --- js-routes (middleware for auto-regeneration in development) ---
-  generate "js_routes:middleware"
-  append_to_file ".gitignore", "\n/app/javascript/routes.js\n/app/javascript/routes.d.ts\n"
 
   # --- Vite + Inertia Rails ---
   run "bundle exec vite install"
@@ -123,6 +124,11 @@ after_bundle do
   inertia_opts += @install_tailwind ? " --tailwind" : " --no-tailwind"
   generate "inertia:install", inertia_opts
   rake "bun:install"
+
+  # --- js-routes (middleware for auto-regeneration in development) ---
+  # Must run after Vite/Inertia so app/frontend/ exists when js-routes writes routes.js
+  generate "js_routes:middleware"
+  append_to_file ".gitignore", "\n/app/javascript/routes.js\n/app/javascript/routes.d.ts\n"
 
   # --- Solid Queue + Mission Control ---
   rails_command "solid_queue:install"
